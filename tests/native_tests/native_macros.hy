@@ -257,5 +257,22 @@
        (yield 4))))
   (assert (= (list (yield-from-test)) [0 1 2 1 2 3 4])))
 
+(defn test-yield-from-exception-handling-up []
+  "NATIVE: Ensure exception handling in yield from works right going up"
+  ;; Test case derived from pyos's report in
+  ;; https://github.com/hylang/hy/issues/692
+  (defn f []
+     (yield 1)
+     (try
+       (yield 2)
+     (catch [e ValueError] (yield 3))))
+
+  (defn g []
+     (yield-from (f)))
+  (setv x (g))
+  (next x)
+  (next x)
+  (assert (= (x.throw ValueError) 3)))
+
 (defn test-botsbuildbots []
   (assert (> (len (first (Botsbuildbots))) 50)))

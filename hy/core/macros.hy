@@ -180,23 +180,55 @@
 
 
 (if-python2
-  (defmacro/g! yield-from [expr]
-    `(do (import types)
-         (setv ~g!iter (iter ~expr))
-         (setv ~g!return nil)
-         (setv ~g!message nil)
-         (while true
-           (try (if (isinstance ~g!iter types.GeneratorType)
-                  (setv ~g!message (yield (.send ~g!iter ~g!message)))
-                  (setv ~g!message (yield (next ~g!iter))))
-           (catch [~g!e StopIteration]
-             (do (setv ~g!return (if (hasattr ~g!e "value")
-                                     (. ~g!e value)
-                                     nil))
-               (break)))))
-           ~g!return))
-  nil)
-
+ (defmacro yield-from [expr]
+   ;; translated from the "Formal Semantics" section of PEP 380
+   ;; https://www.python.org/dev/peps/pep-0380/#formal-semantics
+   `(do
+     (import sys)
+     (defn value-from-stop-iteration [si]
+       ;; From the PEP:
+       ;; "For convenience, the StopIteration exception will be given
+       ;; a value attribute that holds its first argument, or None if
+       ;; there are no arguments."
+       ;; python.org/dev/peps/pep-0380/#enhancements-to-stopiteration
+       (if (getattr si "args")
+         (. si args [0])))
+     (setv -i (iter ~expr))
+     (try
+      (setv -y (next -i))
+      (catch [-e StopIteration]
+        (setv -r (value-from-stop-iteration -e)))
+      (else
+       (while true
+         (try
+          (setv -s (yield -y))
+          (catch [-e GeneratorExit]
+            (try
+             (setv -m -i.close)
+             (catch [-- AttributeError])
+             (else (raise -e))))
+          (catch [-e BaseException]
+            (setv -x (sys.exc-info))
+            (try
+             (setv -m -i.throw)
+             (catch [-- AttributeError]
+               (raise -e))
+             (else
+              (try
+               (setv -y (apply -m -x))
+               (catch [-e StopIteration]
+                 (setv -r (value-from-stop-iteration -e))
+                 (break))))))
+          (else
+           (try
+            (if (is -s nil)
+              (setv -y (next -i))
+              (setv -y (.send -i -s)))
+            (catch [-e StopIteration]
+              (setv -r (value-from-stop-iteration -e))
+              (break))))))))
+     (raise (StopIteration -r))))
+ nil)
 
 (defmacro defmain [args &rest body]
   "Write a function named \"main\" and do the if __main__ dance"
