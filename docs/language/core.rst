@@ -207,6 +207,19 @@ Returns ``True`` if *x* is a float.
    False
 
 
+.. _fraction-fn:
+
+fraction
+--------
+
+Returns a Python object of type ``fractions.Fraction``.
+
+.. code-block:: hy
+   
+   => (fraction 1 2)
+   Fraction(1, 2)
+
+
 .. _even?-fn:
 
 even?
