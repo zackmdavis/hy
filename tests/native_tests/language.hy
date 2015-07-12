@@ -430,6 +430,26 @@
      (except))
     (assert (= x 0))))
 
+(defn test-try-form-return-values []
+  (assert (= 0 (try 0
+                    (catch [e Exception] 1))))
+  (assert (= 1 (try (raise Exception)
+                    (catch [e Exception] 1))))
+  (assert (= 2 (try 0
+                    (catch [e Exception] 1)
+                    (finally 2))))
+  (assert (= 2 (try 0
+                    (catch [e Exception] 1)
+                    (else 2))))
+  (assert (= 3 (try 0
+                    (catch [e Exception] 1)
+                    (else 2)
+                    (finally 3))))
+  (assert (= 3 (try (raise Exception)
+                    (catch [e Exception] 1)
+                    (else 2)
+                    (finally 3)))))
+
 (defn test-earmuffs []
   "NATIVE: Test earmuffs"
   (setv *foo* "2")

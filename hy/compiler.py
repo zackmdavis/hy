@@ -790,7 +790,9 @@ class HyASTCompiler(object):
                              col_offset=expr.start_column)]
 
         orelse = []
+        orelse_results = Result()
         finalbody = []
+        finalbody_results = Result()
         handlers = []
         handler_results = Result()
 
@@ -801,11 +803,16 @@ class HyASTCompiler(object):
             if e[0] in (HySymbol("except"), HySymbol("catch")):
                 handler_results += self._compile_catch_expression(e, name)
                 handlers.append(handler_results.stmts.pop())
-            elif e[0] == HySymbol("else"):
-                orelse = self.try_except_helper(e, HySymbol("else"), orelse)
-            elif e[0] == HySymbol("finally"):
-                finalbody = self.try_except_helper(e, HySymbol("finally"),
-                                                   finalbody)
+            elif e[0] in (HySymbol("else"), HySymbol("finally")):
+                if e[0] == HySymbol("else"):
+                    tail_clause, tail_results = orelse, orelse_results
+                elif e[0] == HySymbol("finally"):
+                    tail_clause, tail_results = finalbody, finalbody_results
+                if tail_clause:
+                    raise HyTypeError(
+                        e, "`try' cannot have more than one `%s'" % e[0])
+                tail_results += self._compile_try_else_finally(e[1:], name)
+                tail_clause.append(tail_results.stmts.pop())
             else:
                 raise HyTypeError(e, "Unknown expression in `try'")
 
@@ -864,16 +871,20 @@ class HyASTCompiler(object):
             body=body,
             orelse=orelse) + returnable
 
-    def try_except_helper(self, hy_obj, symbol, accumulated):
-        if accumulated:
-            raise HyTypeError(
-                hy_obj,
-                "`try' cannot have more than one `%s'" % symbol)
-        else:
-            accumulated = self._compile_branch(hy_obj[1:])
-            accumulated += accumulated.expr_as_stmt()
-            accumulated = accumulated.stmts
-        return accumulated
+    def _compile_try_else_finally(self, expr, var):
+        # from pudb import set_trace as debug; debug()
+        body = self._compile_branch(expr)
+        body += ast.Assign(targets=[var],
+                           value=body.force_expr,
+                           lineno=expr.start_line,
+                           col_offset=expr.start_column)
+        body += body.expr_as_stmt()
+
+        body = body.stmts
+        if not body:
+            body = [ast.Pass(lineno=expr.start_line,
+                             col_offset=expr.start_column)]
+        return Result(stmts=body)
 
     @builds("except")
     @builds("catch")
